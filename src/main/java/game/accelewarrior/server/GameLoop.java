@@ -43,13 +43,13 @@ public class GameLoop extends ApplicationAdapter {
         });
         socketHandler.setMessageListener(((session, message) -> {
             pool.execute(() -> {
-                String type = message.getString("type");
+                String type = message.get("type").asText();
                 switch (type) {
                     case "state":
                         Warrior warrior = warriors.get(session.getId());
-                        warrior.setAccelerometerX(message.getFloat("accelerometerX"));
-                        warrior.setAccelerometerY(message.getFloat("accelerometerY"));
-                        warrior.setJustTouched(message.getBoolean("justTouched"));
+                        warrior.setAccelerometerX((float) message.get("accelerometerX").asDouble());
+                        warrior.setAccelerometerY((float) message.get("accelerometerY").asDouble());
+                        warrior.setJustTouched(message.get("justTouched").asBoolean());
                         break;
                     default: throw new RuntimeException("Unknown WS object type: " + type);
                 }
