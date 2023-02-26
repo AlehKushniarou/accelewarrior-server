@@ -2,6 +2,7 @@ package game.accelewarrior.server;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Json;
 import com.badlogic.gdx.utils.ObjectMap;
 import game.accelewarrior.server.actors.Warrior;
@@ -18,8 +19,10 @@ public class GameLoop extends ApplicationAdapter {
     private final WebSocketHandler socketHandler;
     private float lastRender = 0.0f;
     private final Json json;
-    private final ObjectMap<String, Warrior> warriors = new ObjectMap<>();
     private final ForkJoinPool pool = ForkJoinPool.commonPool();
+
+    private final ObjectMap<String, Warrior> warriors = new ObjectMap<>();
+    private final Array<Warrior> stateToSend = new Array<>();
 
     public GameLoop(WebSocketHandler socketHandler, Json json) {
         this.socketHandler = socketHandler;
@@ -33,12 +36,20 @@ public class GameLoop extends ApplicationAdapter {
             warrior.setId(session.getId());
             warriors.put(session.getId(), warrior);
             try {
-                session.getNativeSession().getBasicRemote().sendText(session.getId());
+                session
+                        .getNativeSession()
+                        .getBasicRemote()
+                        .sendText(
+                                String.format("{\"class\":\"sessionKey\",\"id\":\"%s\"}", session.getId())
+                        );
             } catch (IOException e) {
                 e.printStackTrace();
             }
         });
         socketHandler.setDisconnectListener(session -> {
+            sendToAll(
+                    String.format("{\"class\":\"evict\",\"id\":\"%s\"}", session.getId())
+            );
             warriors.remove(session.getId());
         });
         socketHandler.setMessageListener(((session, message) -> {
@@ -62,23 +73,31 @@ public class GameLoop extends ApplicationAdapter {
     public void render() {
         lastRender += Gdx.graphics.getDeltaTime();
         if (lastRender >= FRAME_RATE) {
+            stateToSend.clear();
             for (ObjectMap.Entry<String, Warrior> warriorEntry : warriors) {
                 Warrior warrior = warriorEntry.value;
                 warrior.act(lastRender);
+                stateToSend.add(warrior);
             }
 
             lastRender = 0;
+            String stateJson = json.toJson(stateToSend);
 
-            pool.execute(() ->{
-                String stateJson = json.toJson(warriors);
-                for (StandardWebSocketSession session : socketHandler.getSessions()) {
-                    try {
-                        session.getNativeSession().getBasicRemote().sendText(stateJson);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
+            sendToAll(stateJson);
         }
+    }
+
+    private void sendToAll(String json) {
+        pool.execute(() ->{
+            for (StandardWebSocketSession session : socketHandler.getSessions()) {
+                try {
+                    if (session.isOpen()) {
+                        session.getNativeSession().getBasicRemote().sendText(json);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 }

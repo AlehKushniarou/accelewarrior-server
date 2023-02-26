@@ -2,6 +2,7 @@ package game.accelewarrior.server.websocket;
 
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.JsonValue;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class WebSocketHandler extends AbstractWebSocketHandler {
     private MessageListener messageListener;
 
     public WebSocketHandler(ObjectMapper mapper) {
+        //mapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true);
         this.mapper = mapper;
     }
 
